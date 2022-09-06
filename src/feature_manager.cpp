@@ -44,46 +44,55 @@ int FeatureManager::getFeatureCount()
 
 bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td)
 {
-    //ROS_DEBUG("input feature: %d", (int)image.size());
-    //ROS_DEBUG("num of feature: %d", getFeatureCount());
-    double parallax_sum = 0;
+    //ROS_DEBUG("input feature: %d", (int)image.size());//特征点数量
+    //ROS_DEBUG("num of feature: %d", getFeatureCount());//能够作为特征点的数量
+    double parallax_sum = 0;//所有特征点视差和
     int parallax_num = 0;
-    last_track_num = 0;
+    last_track_num = 0;//被跟踪的个数
+
+    // 1. 把image map中的所有特征点放入feature list容器中
+    // 遍历特征点,看该特征点是否在特征点的列表中,如果没在,则将<FeatureID,Start_frame>存入到Feature列表中；否则统计数目
     for (auto &id_pts : image)
     {
-        FeaturePerFrame f_per_fra(id_pts.second[0].second, td);
+        FeaturePerFrame f_per_fra(id_pts.second[0].second, td);// _point 每帧的特征点[x,y,z,u,v,vx,vy]和td IMU和cam同步时间差
 
+        // 1.1迭代器寻找feature list中是否有这feature_id
         int feature_id = id_pts.first;
         auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
                           {
             return it.feature_id == feature_id;
                           });
-
+        // 1.2 如果没有则新建一个，并在feature管理器的list容器最后添加：FeaturePerId、FeaturePerFrame
         if (it == feature.end())
         {
             feature.push_back(FeaturePerId(feature_id, frame_count));
             feature.back().feature_per_frame.push_back(f_per_fra);
         }
+        // 1.3 之前有的话在FeaturePerFrame添加此特征点在此帧的位置和其他信息，并统计数目。
         else if (it->feature_id == feature_id)
         {
             it->feature_per_frame.push_back(f_per_fra);
-            last_track_num++;
+            last_track_num++;// 此帧有多少相同特征点被跟踪
         }
     }
 
+    // 2. 追踪次数小于20或者窗口内帧的数目小于2，是关键帧
     if (frame_count < 2 || last_track_num < 20)
         return true;
 
+    // 3.计算每个特征在次新帧和次次新帧中的视差
     for (auto &it_per_id : feature)
     {
+        // 观测该特征点的：起始帧小于倒数第三帧，终止帧要大于倒数第二帧，保证至少有两帧能观测到。
         if (it_per_id.start_frame <= frame_count - 2 &&
             it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
         {
+            // 总视差：该特征点在两帧的归一化平面上的坐标点的距离ans
             parallax_sum += compensatedParallax2(it_per_id, frame_count);
-            parallax_num++;
+            parallax_num++;// 个数
         }
     }
-
+    // 4.1 第一次加进去的，是关键帧
     if (parallax_num == 0)
     {
         return true;
@@ -92,6 +101,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     {
         //ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
         //ROS_DEBUG("current parallax: %lf", parallax_sum / parallax_num * FOCAL_LENGTH);
+        // 4.2 平均视差大于阈值的是关键帧
         return parallax_sum / parallax_num >= MIN_PARALLAX;
     }
 }
@@ -180,7 +190,7 @@ void FeatureManager::clearDepth(const VectorXd &x)
         it_per_id.estimated_depth = 1.0 / x(++feature_index);
     }
 }
-
+//返回每个点的逆深度
 VectorXd FeatureManager::getDepthVector()
 {
     VectorXd dep_vec(getFeatureCount());
@@ -201,8 +211,10 @@ VectorXd FeatureManager::getDepthVector()
 
 void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
 {
+    //遍历每个特征点
     for (auto &it_per_id : feature)
     {
+        // 需要至少两帧观测到该特征点 且 首次观测到特征点的帧不是倒数第三帧
         it_per_id.used_num = it_per_id.feature_per_frame.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
@@ -215,6 +227,7 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
         Eigen::MatrixXd svd_A(2 * it_per_id.feature_per_frame.size(), 4);
         int svd_idx = 0;
 
+        //R0 t0为第i帧相机坐标系到世界坐标系的变换矩阵Rwc
         Eigen::Matrix<double, 3, 4> P0;
         Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0];
         Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];
@@ -224,7 +237,7 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
         for (auto &it_per_frame : it_per_id.feature_per_frame)
         {
             imu_j++;
-
+            //R t为第j帧相机坐标系到第i帧相机坐标系的变换矩阵，P为i到j的变换矩阵
             Eigen::Vector3d t1 = Ps[imu_j] + Rs[imu_j] * tic[0];
             Eigen::Matrix3d R1 = Rs[imu_j] * ric[0];
             Eigen::Vector3d t = R0.transpose() * (t1 - t0);
@@ -357,16 +370,18 @@ double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int f
 {
     //check the second last frame is keyframe or not
     //parallax betwwen seconde last frame and third last frame
+    // 倒数第三帧
     const FeaturePerFrame &frame_i = it_per_id.feature_per_frame[frame_count - 2 - it_per_id.start_frame];
+    // 倒数第二帧
     const FeaturePerFrame &frame_j = it_per_id.feature_per_frame[frame_count - 1 - it_per_id.start_frame];
 
     double ans = 0;
-    Vector3d p_j = frame_j.point;
+    Vector3d p_j = frame_j.point;// 3D路标点（倒数第二帧j
 
     double u_j = p_j(0);
     double v_j = p_j(1);
 
-    Vector3d p_i = frame_i.point;
+    Vector3d p_i = frame_i.point;// 3D路标点（倒数第三帧i）
     Vector3d p_i_comp;
 
     //int r_i = frame_count - 2;

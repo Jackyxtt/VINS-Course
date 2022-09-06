@@ -142,6 +142,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 {
     //ROS_DEBUG("new image coming ------------------------------------------");
     // cout << "Adding feature points: " << image.size()<<endl;
+    //1.通过检测两帧之间的视差决定次新帧是否作为关键帧
     if (f_manager.addFeatureCheckParallax(frame_count, image, td))
         marginalization_flag = MARGIN_OLD;
     else
@@ -151,6 +152,8 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     //ROS_DEBUG("%s", marginalization_flag ? "Non-keyframe" : "Keyframe");
     //ROS_DEBUG("Solving %d", frame_count);
     // cout << "number of feature: " << f_manager.getFeatureCount()<<endl;
+
+    //2.填充imageframe的容器以及更新临时预积分初始值
     Headers[frame_count] = header;
 
     ImageFrame imageframe(image, header);
@@ -158,6 +161,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     all_image_frame.insert(make_pair(header, imageframe));
     tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
 
+    //3.如果没有外参则标定IMU到相机的外参
     if (ESTIMATE_EXTRINSIC == 2)
     {
         cout << "calibrating extrinsic param, rotation movement is needed" << endl;
@@ -177,6 +181,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         }
     }
 
+    //初始化
     if (solver_flag == INITIAL)
     {
         if (frame_count == WINDOW_SIZE)
@@ -206,6 +211,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         else
             frame_count++;
     }
+    //紧耦合的非线性优化
     else
     {
         TicToc t_solve;

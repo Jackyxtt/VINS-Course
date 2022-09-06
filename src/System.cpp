@@ -9,7 +9,7 @@ using namespace pangolin;
 System::System(string sConfig_file_)
     :bStart_backend(true)
 {
-    string sConfig_file = sConfig_file_ + "euroc_config.yaml";
+    string sConfig_file = sConfig_file_; //改成配置文件的路径
 
     cout << "1 System() sConfig_file: " << sConfig_file << endl;
     readParameters(sConfig_file);
@@ -17,7 +17,7 @@ System::System(string sConfig_file_)
     trackerData[0].readIntrinsicParameter(sConfig_file);
 
     estimator.setParameter();
-    ofs_pose.open("./pose_output.txt",fstream::app | fstream::out);
+    ofs_pose.open("./pose_output.txt",fstream::ate | fstream::out);
     if(!ofs_pose.is_open())
     {
         cerr << "ofs_pose is not open" << endl;
@@ -45,6 +45,86 @@ System::~System()
     m_estimator.unlock();
 
     ofs_pose.close();
+}
+
+void System::PubSimImageData(const vector<cv::Point2f> &feature, const double &dStampSec) {
+
+//    if (!init_feature)
+//    {
+//        cout << "1 PubImageData skip the first detected feature, which doesn't contain optical flow speed" << endl;
+//        init_feature = 1;
+//        return;
+//    }
+//
+//    if (first_image_flag)
+//    {
+//        cout << "2 PubImageData first_image_flag" << endl;
+//        first_image_flag = false;
+//        first_image_time = dStampSec;
+//        last_image_time = dStampSec;
+//        return;
+//    }
+//    // detect unstable camera stream
+//    if (dStampSec - last_image_time > 1.0 || dStampSec < last_image_time)
+//    {
+//        cerr << "3 PubImageData image discontinue! reset the feature tracker!" << endl;
+//        first_image_flag = true;
+//        last_image_time = 0;
+//        pub_count = 1;
+//        return;
+//    }
+    last_image_time = dStampSec;
+
+    PUB_THIS_FRAME = true;
+    TicToc t_r;
+
+    trackerData[0].loaddata(feature, dStampSec);
+
+    for (unsigned int i = 0;; i++)
+    {
+        bool completed = false;
+        completed |= trackerData[0].updateID(i); //a|=b;就是a=a|b
+
+        if (!completed)
+            break;
+    }
+
+    if (PUB_THIS_FRAME) {
+        pub_count++;
+        shared_ptr<IMG_MSG> feature_points(new IMG_MSG());
+        feature_points->header = dStampSec;
+
+        for (int i = 0; i < NUM_OF_CAM; i++) {
+            auto &pts_velocity = trackerData[i].pts_velocity;
+            for (int j = 0; j < feature.size(); j++) {
+                int p_id = j;
+                feature_points->points.push_back(Vector3d(feature[j].x, feature[j].y, 1));
+                feature_points->id_of_point.push_back(p_id * NUM_OF_CAM + i);
+                cv::Point2f pixel_point;
+                pixel_point.x = 460 * feature[j].x + 255;
+                pixel_point.y = 460 * feature[j].y + 255;
+                feature_points->u_of_point.push_back(pixel_point.x);
+                feature_points->v_of_point.push_back(pixel_point.y);
+                feature_points->velocity_x_of_point.push_back(pts_velocity[j].x);
+                feature_points->velocity_y_of_point.push_back(pts_velocity[j].y);
+//                feature_points->velocity_x_of_point.push_back(0);
+//                feature_points->velocity_y_of_point.push_back(0);
+            }
+            if (!init_pub)
+            {
+                cout << "4 PubImage init_pub skip the first image!" << endl;
+                init_pub = 1;
+            }
+            else {
+                m_buf.lock();
+                feature_buf.push(feature_points);
+                m_buf.unlock();
+                con.notify_one();
+            }
+        }
+    }
+    // cout << "5 PubImage t : " << fixed << feature_points->header
+    //     << " feature_buf size: " << feature_buf.size() << endl;
 }
 
 void System::PubImageData(double dStampSec, Mat &img)
@@ -107,7 +187,7 @@ void System::PubImageData(double dStampSec, Mat &img)
         pub_count++;
         shared_ptr<IMG_MSG> feature_points(new IMG_MSG());
         feature_points->header = dStampSec;
-        vector<set<int>> hash_ids(NUM_OF_CAM);
+        vector<set<int>> hash_ids(NUM_OF_CAM); //hash_ids只在两处用到，不重要
         for (int i = 0; i < NUM_OF_CAM; i++)
         {
             auto &un_pts = trackerData[i].cur_un_pts;
@@ -123,9 +203,9 @@ void System::PubImageData(double dStampSec, Mat &img)
                     double x = un_pts[j].x;
                     double y = un_pts[j].y;
                     double z = 1;
-                    feature_points->points.push_back(Vector3d(x, y, z));
+                    feature_points->points.push_back(Vector3d(x, y, z));//归一化坐标
                     feature_points->id_of_point.push_back(p_id * NUM_OF_CAM + i);
-                    feature_points->u_of_point.push_back(cur_pts[j].x);
+                    feature_points->u_of_point.push_back(cur_pts[j].x);//像素坐标
                     feature_points->v_of_point.push_back(cur_pts[j].y);
                     feature_points->velocity_x_of_point.push_back(pts_velocity[j].x);
                     feature_points->velocity_y_of_point.push_back(pts_velocity[j].y);
@@ -176,12 +256,13 @@ vector<pair<vector<ImuConstPtr>, ImgConstPtr>> System::getMeasurements()
 
     while (true)
     {
+
         if (imu_buf.empty() || feature_buf.empty())
         {
             // cerr << "1 imu_buf.empty() || feature_buf.empty()" << endl;
             return measurements;
         }
-
+        //IMU最新的时间戳imu_buf.back() 小于 最旧的图像帧feature_buf.front()+ td
         if (!(imu_buf.back()->header > feature_buf.front()->header + estimator.td))
         {
             cerr << "wait for imu, only should happen at the beginning sum_of_wait: " 
@@ -189,7 +270,7 @@ vector<pair<vector<ImuConstPtr>, ImgConstPtr>> System::getMeasurements()
             sum_of_wait++;
             return measurements;
         }
-
+        //IMU最旧的时间戳imu_buf.front() 大于 图像帧最旧的时间戳feature_buf.front()+ td，
         if (!(imu_buf.front()->header < feature_buf.front()->header + estimator.td))
         {
             cerr << "throw img, only should happen at the beginning" << endl;
@@ -200,6 +281,8 @@ vector<pair<vector<ImuConstPtr>, ImgConstPtr>> System::getMeasurements()
         feature_buf.pop();
 
         vector<ImuConstPtr> IMUs;
+        // 4.图像数据(img_msg)，对应多组在时间戳内的imu数据,然后塞入measurements
+        // 理想：IMU最旧的在图像帧最旧的之前，说明IMU数据足够
         while (imu_buf.front()->header < img_msg->header + estimator.td)
         {
             IMUs.emplace_back(imu_buf.front());
@@ -273,9 +356,10 @@ void System::ProcessBackEnd()
             {
                 double t = imu_msg->header;
                 double img_t = img_msg->header + estimator.td;
+                //imu时间比图像时间要早
                 if (t <= img_t)
                 {
-                    if (current_time < 0)
+                    if (current_time < 0)//初始值为-1
                         current_time = t;
                     double dt = t - current_time;
                     assert(dt >= 0);
@@ -344,7 +428,8 @@ void System::ProcessBackEnd()
                 vPath_to_draw.push_back(p_wi);
                 double dStamp = estimator.Headers[WINDOW_SIZE];
                 cout << "1 BackEnd processImage dt: " << fixed << t_processImage.toc() << " stamp: " <<  dStamp << " p_wi: " << p_wi.transpose() << endl;
-                ofs_pose << fixed << dStamp << " " << p_wi.transpose() << " " << q_wi.coeffs().transpose() << endl;
+                ofs_pose << dStamp << " " << p_wi(0) << " " << p_wi(1) << " "
+                << p_wi(2) << " " << q_wi.w() << " " << q_wi.x() << " " <<  q_wi.y() << " " << q_wi.z() << endl;
             }
         }
         m_estimator.unlock();

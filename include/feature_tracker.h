@@ -46,6 +46,10 @@ class FeatureTracker
 
     void undistortedPoints();
 
+    void undistortedSimdataPoints();
+
+    void loaddata(const vector<cv::Point2f> &feature, const double &dStampSec);
+
     cv::Mat mask;
     cv::Mat fisheye_mask;
     cv::Mat prev_img, cur_img, forw_img;
@@ -60,6 +64,6 @@ class FeatureTracker
     camodocal::CameraPtr m_camera;
     double cur_time;
     double prev_time;
-
+    bool init = false;
     static int n_id;
 };

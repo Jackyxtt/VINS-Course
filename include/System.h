@@ -51,6 +51,8 @@ public:
     void PubImuData(double dStampSec, const Eigen::Vector3d &vGyr, 
         const Eigen::Vector3d &vAcc);
 
+    void PubSimImageData(const vector<cv::Point2f> &feature, const double &dStampSec);
+
     // thread: visual-inertial odometry
     void ProcessBackEnd();
     void Draw();
