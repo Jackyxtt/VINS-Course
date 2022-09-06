@@ -3,7 +3,7 @@
 #common parameters
 imu_topic: "/imu0"
 image_topic: "/cam0/image_raw"
-output_path: "/home/hyj/slam_course_vins"
+output_path: "/media/yxt/storage/教程/从零手写VIO/第7章VINS系统"
 
 #camera calibration 
 model_type: PINHOLE

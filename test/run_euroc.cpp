@@ -18,7 +18,7 @@ using namespace cv;
 using namespace Eigen;
 
 const int nDelayTimes = 2;
-string sData_path = "/home/dataset/EuRoC/MH-05/mav0/";
+string sData_path = "/media/yxt/storage/教程/从零手写VIO/MH05/mav0/";
 string sConfig_path = "../config/";
 
 std::shared_ptr<System> pSystem;
@@ -177,9 +177,7 @@ int main(int argc, char **argv)
 	thd_PubImageData.join();
 
 	// thd_BackEnd.join();
-#ifdef __linux__	
-	thd_Draw.join();
-#endif
+	// thd_Draw.join();
 
 	cout << "main end... see you ..." << endl;
 	return 0;

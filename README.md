@@ -1,10 +1,8 @@
 # Vins Course
-[ ![Build Status](doc/README-English-yellow.svg) ](README_EN.md)
-
 **作者**：贺一家，高翔，崔华坤，赵松
 
 **描述**：
-这是一个用于[深蓝学院](<http://www.shenlanxueyuan.com/>)教学的代码，她基于 VINS-Mono 框架，但不依赖 ROS, Ceres, G2o。这个代码非常基础，目的在于演示仅基于 Eigen 的后端 LM 算法，滑动窗口算法，鲁棒核函数等等 SLAM 优化中常见的算法。
+这是一个用于深蓝学院教学的代码，她基于 VINS-Mono 框架，但不依赖 ROS, Ceres, G2o。这个代码非常基础，目的在于演示仅基于 Eigen 的后端 LM 算法，滑动窗口算法，鲁棒核函数等等 SLAM 优化中常见的算法。
 该代码支持 Ubuntu or Mac OS.
 
 ### 安装依赖项：
@@ -32,14 +30,14 @@ make -j4
 ### 运行
 #### 1. CurveFitting Example to Verify Our Solver.
 ```c++
-cd bin
-./testCurveFitting 
+cd build
+../bin/testCurveFitting 
 ```
 
 #### 2. VINs-Mono on Euroc Dataset
 ```c++
-cd bin
-./run_euroc /home/dataset/EuRoC/MH-05/mav0/ ../config/
+cd build
+../bin/run_euroc /home/dataset/EuRoC/MH-05/mav0/ ../config/
 ```
 ![vins](doc/vins.gif)
 
@@ -50,14 +48,6 @@ you can use this code to generate vio data.
 ```c++
 https://github.com/HeYijia/vio_data_simulation
 ```
-
-#### 4. Validation Results
-[evo package](https://github.com/MichaelGrupp/evo)
-```c++
-evo_ape euroc euroc_mh05_groundtruth.csv pose_output.txt -a -p
-```
-
-![results](doc/results.png)
 
 ### Licence
 

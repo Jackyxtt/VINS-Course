@@ -82,3 +82,8 @@ target_link_libraries(run_euroc
 add_executable(testCurveFitting test/CurveFitting.cpp)
 target_link_libraries(testCurveFitting MyVio)
 
+add_executable(dark_env test/run_dark_env.cpp)
+target_link_libraries(dark_env
+		MyVio
+		-lpthread)
+

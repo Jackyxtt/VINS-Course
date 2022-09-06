@@ -58,8 +58,6 @@ public:
     pangolin::OpenGlRenderState s_cam;
     pangolin::View d_cam;
 
-    FeatureTracker trackerData[NUM_OF_CAM];
-
 #ifdef __APPLE__
     void InitDrawGL(); 
     void DrawGLFrame();
@@ -75,6 +73,7 @@ private:
     // ros::Publisher pub_img, pub_match;
     // ros::Publisher pub_restart;
 
+    FeatureTracker trackerData[NUM_OF_CAM];
     double first_image_time;
     int pub_count = 1;
     bool first_image_flag = true;
