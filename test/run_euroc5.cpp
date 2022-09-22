@@ -6,6 +6,7 @@
 #include <iostream>
 #include <thread>
 #include <iomanip>
+#include "utility/tic_toc.h"
 
 #include <cv.h>
 #include <opencv2/opencv.hpp>
@@ -160,14 +161,21 @@ int main(int argc, char **argv)
 	sData_path = argv[1];
 	sConfig_path = argv[2];
 
+
+
 	pSystem.reset(new System(sConfig_path));
-	
+
+    TicToc tt;
+    PubImageData();
+    cout << "image processing costs " << tt.toc() << endl; //TicToc输出的是毫秒
+    PubImuData();
+
 	std::thread thd_BackEnd(&System::ProcessBackEnd, pSystem);
 		
 	// sleep(5);
-	std::thread thd_PubImuData(PubImuData);
+//	std::thread thd_PubImuData(PubImuData);
 
-	std::thread thd_PubImageData(PubImageData);
+//	std::thread thd_PubImageData(PubImageData);
 //    std::thread thd_PubImageData(PubSimImageData);
 
 #ifdef __linux__	
@@ -176,11 +184,11 @@ int main(int argc, char **argv)
 	DrawIMGandGLinMainThrd();
 #endif
 
-	thd_PubImuData.join();
-	thd_PubImageData.join();
+//	thd_PubImuData.join();
+//	thd_PubImageData.join();
 
 	 thd_BackEnd.join(); //让imu和image读取线程读取完后等待backend线程
-	// thd_Draw.join();
+	 thd_Draw.join();
 
 	cout << "main end... see you ..." << endl;
 	return 0;
