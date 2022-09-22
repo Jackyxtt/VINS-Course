@@ -50,49 +50,9 @@ void PubImuData()
 		ssImuData >> vGyr.x() >> vGyr.y() >> vGyr.z() >> vAcc.x() >> vAcc.y() >> vAcc.z();
 		// cout << "Imu t: " << fixed << dStampNSec << " gyr: " << vGyr.transpose() << " acc: " << vAcc.transpose() << endl;
 		pSystem->PubImuData(dStampNSec, vGyr, vAcc);
-		usleep(5000*nDelayTimes);//10000um = 0.01s
+		usleep(2500*nDelayTimes);//5ms, 200hz
 	}
 	fsImu.close();
-}
-
-void PubImageData()
-{
-	string sImage_file = sConfig_path + "MH_05_cam0.txt";
-
-	cout << "1 PubImageData start sImage_file: " << sImage_file << endl;
-
-	ifstream fsImage;
-	fsImage.open(sImage_file.c_str());
-	if (!fsImage.is_open())
-	{
-		cerr << "Failed to open image file! " << sImage_file << endl;
-		return;
-	}
-
-	std::string sImage_line;
-	double dStampNSec;
-	string sImgFileName;
-	
-	// cv::namedWindow("SOURCE IMAGE", CV_WINDOW_AUTOSIZE);
-	while (std::getline(fsImage, sImage_line) && !sImage_line.empty())
-	{
-		std::istringstream ssImuData(sImage_line);
-		ssImuData >> dStampNSec >> sImgFileName;
-		// cout << "Image t : " << fixed << dStampNSec << " Name: " << sImgFileName << endl;
-		string imagePath = sData_path + "cam0/data/" + sImgFileName;
-
-		Mat img = imread(imagePath.c_str(), 0);
-		if (img.empty())
-		{
-			cerr << "image is empty! path: " << imagePath << endl;
-			return;
-		}
-		pSystem->PubImageData(dStampNSec / 1e9, img);
-		// cv::imshow("SOURCE IMAGE", img);
-		// cv::waitKey(0);
-		usleep(50000*nDelayTimes);
-	}
-	fsImage.close();
 }
 
 void PubSimImageData(){
@@ -145,7 +105,7 @@ void PubSimImageData(){
 
         }
         pSystem->PubSimImageData(FeaturePoints, dStampNSec);
-        usleep(100000*nDelayTimes);//usleep延时时间单位为微秒，百万分之一,200000us = 0.2s,5Hz
+        usleep(50000*nDelayTimes);//usleep延时时间单位为微秒，百万分之一,100ms ,10Hz
         n++;
     }
     fsImage.close();
@@ -216,7 +176,7 @@ int main(int argc, char **argv)
 			<< "For example: ./run_euroc /home/stevencui/dataset/EuRoC/MH-05/mav0/ ../config/file.yaml"<< endl;
 		return -1;
 	}
-	sData_path = argv[1];
+	sData_path = argv[1];//第一个参数随便写的不重要
 	sConfig_path = argv[2];
 
 	pSystem.reset(new System(sConfig_path));
