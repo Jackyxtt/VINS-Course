@@ -12,6 +12,7 @@
 #include <highgui.h>
 #include <eigen3/Eigen/Dense>
 #include "System.h"
+#include "utility/tic_toc.h"
 
 using namespace std;
 using namespace cv;
@@ -50,7 +51,7 @@ void PubImuData()
 		ssImuData >> vGyr.x() >> vGyr.y() >> vGyr.z() >> vAcc.x() >> vAcc.y() >> vAcc.z();
 		// cout << "Imu t: " << fixed << dStampNSec << " gyr: " << vGyr.transpose() << " acc: " << vAcc.transpose() << endl;
 		pSystem->PubImuData(dStampNSec, vGyr, vAcc);
-		usleep(2500*nDelayTimes);//5ms, 200hz
+//		usleep(2500*nDelayTimes);//5ms, 200hz
 	}
 	fsImu.close();
 }
@@ -76,11 +77,11 @@ void PubSimImageData(){
     while (std::getline(fsImage, sImage_line) && !sImage_line.empty()){
         std::istringstream ssImuData(sImage_line);
         ssImuData >> dStampNSec;
-        cout<<"cam time: "<<fixed<<dStampNSec<<endl;
+//        cout<<"cam time: "<<fixed<<dStampNSec<<endl;
         //cam_pose.txt中相机数与keyframe中每一帧一一对应，从all_points_0.txt到all_points_600
         string imagePath = "/media/yxt/storage/github_useful_tools/vio_data_simulation/bin/keyframe/all_points_"
                 + std::to_string(n) + ".txt";
-        cout<<"points_file: "<<imagePath<<endl;
+//        cout<<"points_file: "<<imagePath<<endl;
         vector<cv::Point2f> FeaturePoints;//容器FeaturePoints存放一个相机的特征点(归一化坐标)
         ifstream f;
         f.open(imagePath.c_str());
@@ -105,7 +106,7 @@ void PubSimImageData(){
 
         }
         pSystem->PubSimImageData(FeaturePoints, dStampNSec);
-        usleep(50000*nDelayTimes);//usleep延时时间单位为微秒，百万分之一,100ms ,10Hz
+//        usleep(50000*nDelayTimes);//usleep延时时间单位为微秒，百万分之一,100ms ,10Hz
         n++;
     }
     fsImage.close();
@@ -180,14 +181,15 @@ int main(int argc, char **argv)
 	sConfig_path = argv[2];
 
 	pSystem.reset(new System(sConfig_path));
+
+    PubImuData();
+    PubSimImageData();
 	
 	std::thread thd_BackEnd(&System::ProcessBackEnd, pSystem);
-		
-	// sleep(5);
-	std::thread thd_PubImuData(PubImuData);
 
-//	std::thread thd_PubImageData(PubImageData);
-    std::thread thd_PubImageData(PubSimImageData);
+//	std::thread thd_PubImuData(PubImuData);
+
+//    std::thread thd_PubImageData(PubSimImageData);
 
 #ifdef __linux__	
 	std::thread thd_Draw(&System::Draw, pSystem);
@@ -195,10 +197,10 @@ int main(int argc, char **argv)
 	DrawIMGandGLinMainThrd();
 #endif
 
-	thd_PubImuData.join();
-	thd_PubImageData.join();
+//	thd_PubImuData.join();
+//	thd_PubImageData.join();
 
-	// thd_BackEnd.join();
+	 thd_BackEnd.join();
 	// thd_Draw.join();
 
 	cout << "main end... see you ..." << endl;
