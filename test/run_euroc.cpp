@@ -82,7 +82,7 @@ void PubSimImageData(){
         string imagePath = "/media/yxt/storage/github_useful_tools/vio_data_simulation/bin/keyframe/all_points_"
                 + std::to_string(n) + ".txt";
 //        cout<<"points_file: "<<imagePath<<endl;
-        vector<cv::Point2f> FeaturePoints;//容器FeaturePoints存放一个相机的特征点(归一化坐标)
+        vector<pair<int, cv::Point2f>> FeaturePoints;//容器FeaturePoints存放一个相机的特征点(归一化坐标)
         ifstream f;
         f.open(imagePath.c_str());
 
@@ -96,13 +96,15 @@ void PubSimImageData(){
         while (std::getline(f, s) && !s.empty()){
             std::istringstream ss(s);
             double tmp;
+            int n_id;
+            ss >> n_id;
             for (int i = 0; i < 4; i++)
                 ss >> tmp;
             float px, py;
             ss >> px;
             ss >> py;
             cv::Point2f pt(px, py);
-            FeaturePoints.push_back(pt);
+            FeaturePoints.push_back(make_pair(n_id,pt));
 
         }
         pSystem->PubSimImageData(FeaturePoints, dStampNSec);
