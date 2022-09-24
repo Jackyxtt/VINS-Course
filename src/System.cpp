@@ -47,47 +47,12 @@ System::~System()
     ofs_pose.close();
 }
 
-void System::PubSimImageData(const vector<cv::Point2f> &feature, const double &dStampSec) {
+void System::PubSimImageData(const vector<pair<int, cv::Point2f>> &feature, const double &dStampSec) {
 
-//    if (!init_feature)
-//    {
-//        cout << "1 PubImageData skip the first detected feature, which doesn't contain optical flow speed" << endl;
-//        init_feature = 1;
-//        return;
-//    }
-//
-//    if (first_image_flag)
-//    {
-//        cout << "2 PubImageData first_image_flag" << endl;
-//        first_image_flag = false;
-//        first_image_time = dStampSec;
-//        last_image_time = dStampSec;
-//        return;
-//    }
-//    // detect unstable camera stream
-//    if (dStampSec - last_image_time > 1.0 || dStampSec < last_image_time)
-//    {
-//        cerr << "3 PubImageData image discontinue! reset the feature tracker!" << endl;
-//        first_image_flag = true;
-//        last_image_time = 0;
-//        pub_count = 1;
-//        return;
-//    }
     last_image_time = dStampSec;
 
     PUB_THIS_FRAME = true;
     TicToc t_r;
-
-    trackerData[0].loaddata(feature, dStampSec);
-
-    for (unsigned int i = 0;; i++)
-    {
-        bool completed = false;
-        completed |= trackerData[0].updateID(i); //a|=b;就是a=a|b
-
-        if (!completed)
-            break;
-    }
 
     if (PUB_THIS_FRAME) {
         pub_count++;
@@ -95,20 +60,17 @@ void System::PubSimImageData(const vector<cv::Point2f> &feature, const double &d
         feature_points->header = dStampSec;
 
         for (int i = 0; i < NUM_OF_CAM; i++) {
-            auto &pts_velocity = trackerData[i].pts_velocity;
             for (int j = 0; j < feature.size(); j++) {
                 int p_id = j;
-                feature_points->points.push_back(Vector3d(feature[j].x, feature[j].y, 1));
-                feature_points->id_of_point.push_back(p_id * NUM_OF_CAM + i);
+                feature_points->points.push_back(Vector3d(feature[j].second.x, feature[j].second.y, 1));
+                feature_points->id_of_point.push_back(feature[j].first);
                 cv::Point2f pixel_point;
-                pixel_point.x = 460 * feature[j].x + 255;
-                pixel_point.y = 460 * feature[j].y + 255;
+                pixel_point.x = 460 * feature[j].second.x + 255;
+                pixel_point.y = 460 * feature[j].second.y + 255;
                 feature_points->u_of_point.push_back(pixel_point.x);
                 feature_points->v_of_point.push_back(pixel_point.y);
-                feature_points->velocity_x_of_point.push_back(pts_velocity[j].x);
-                feature_points->velocity_y_of_point.push_back(pts_velocity[j].y);
-//                feature_points->velocity_x_of_point.push_back(0);
-//                feature_points->velocity_y_of_point.push_back(0);
+                feature_points->velocity_x_of_point.push_back(0);
+                feature_points->velocity_y_of_point.push_back(0);
             }
             if (!init_pub)
             {
@@ -126,7 +88,7 @@ void System::PubSimImageData(const vector<cv::Point2f> &feature, const double &d
     // cout << "5 PubImage t : " << fixed << feature_points->header
     //     << " feature_buf size: " << feature_buf.size() << endl;
 }
-
+// 相当于ros中的callback函数
 void System::PubImageData(double dStampSec, Mat &img)
 {
     if (!init_feature)
@@ -249,7 +211,9 @@ void System::PubImageData(double dStampSec, Mat &img)
     // cout << "5 PubImage" << endl;
     
 }
-//
+//在main函数一口气读取完图像和imu数据时，getMeasurements函数会把所有的imu和图像按照时间戳打包成pair放入measurements后才会
+// 因为imu_buf或者feature_buf为空而返回
+// imu 200Hz 图像 10Hz的情况下，pair中一张图像对应20个IMU测量
 vector<pair<vector<ImuConstPtr>, ImgConstPtr>> System::getMeasurements()
 {
     vector<pair<vector<ImuConstPtr>, ImgConstPtr>> measurements;
@@ -337,6 +301,9 @@ void System::ProcessBackEnd()
         vector<pair<vector<ImuConstPtr>, ImgConstPtr>> measurements;
         
         unique_lock<mutex> lk(m_buf);
+        //如果第二个参数lambda表达式返回值是true，那wait()直接返回；
+        //如果第二个参数lambda表达式返回值是false，那么wait()将解锁互斥量，并堵塞到本行，堵塞到其他某个线程调用notify_one()成员函数为止；
+        // PubImuData, PubSimImageData, PubImageData在将imu数据和图像插入buf后会notify_one()
         con.wait(lk, [&] {
             return (measurements = getMeasurements()).size() != 0;
         });
@@ -348,6 +315,7 @@ void System::ProcessBackEnd()
         }
         lk.unlock();
         m_estimator.lock();
+        // 接下来一帧一帧处理
         for (auto &measurement : measurements)
         {
             auto img_msg = measurement.second;
@@ -399,6 +367,7 @@ void System::ProcessBackEnd()
 
             // TicToc t_s;
             map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
+            // 在本帧中所有的特征点都会被加入到map image中
             for (unsigned int i = 0; i < img_msg->points.size(); i++) 
             {
                 int v = img_msg->id_of_point[i] + 0.5;
